@@ -7,6 +7,7 @@ import { observer, inject } from 'mobx-react';
     increase : stores.counter.increase,
     decrease : stores.counter.decrease,
 }))
+
 @observer
 class Counter extends Component {
     render() {
