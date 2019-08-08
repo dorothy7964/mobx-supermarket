@@ -191,6 +191,8 @@ export default class CounterStore {
 }
 ```
 
+<br/>
+
 ## Provider 로 프로젝트에 스토어 적용
 
 MobX에서 프로젝트에 스토어를 적용 할 때는, Redux 처럼 Provider 라는 컴포넌트를 사용합니다.  
@@ -217,7 +219,9 @@ ReactDOM.render(
 
 ## inject 로 컴포넌트에 스토어 주입
 
-inject 함수는 mobx-react 에 있는 함수로서, 컴포넌트에서 스토어에 접근할 수 있게 해줍니다. 정확히는, 스토어에 있는 값을 컴포넌트의 props 로 "주입"을 해줍니다.
+inject 함수는 mobx-react 에 있는 함수로서, 컴포넌트에서 스토어에 접근할 수 있게 해줍니다. 
+
+정확히는, 스토어에 있는 값을 컴포넌트의 props 로 "주입"을 해줍니다.
 
 ### **stores/Counter.js**
 
@@ -282,9 +286,15 @@ export default Counter;
 
 이제 컴포넌트는, 유저 인터페이스와, 인터랙션만 관리하면 되고 상태 관련 로직은 모두 스토어로 분리되었습니다.
 
-리덕스에서는, 우리가 프리젠테이셔널 컴포넌트 / 컨테이너 컴포넌트 라는 개념에 대해서 알아보았었습니다. 단순히 props 값을 가져오기만 해서 받아오는 컴포넌트는 프리젠테이셔널 컴포넌트라고 부르고, 스토어에서 부터 값이나 액션 생성함수를 받아오는 컴포넌트를 컨테이너 컴포넌트라고 부른다고 했었죠.
+리덕스에서는, 우리가 프리젠테이셔널 컴포넌트 / 컨테이너 컴포넌트 라는 개념에 대해서 알아보았었습니다. 
 
-리덕스 진영에서는, 문서에서도 그렇고 생태계 쪽에서도 그렇고 프리젠테이셔널 / 컨테이너로 분리해서 작성하는게 일반적입니다. 반면, MobX 에서는, 딱히 그런걸 명시하지 않습니다. 그래서, 굳이 번거롭게 컨테이너를 강제적으로 만드실 필요는 없습니다. 하지만, 하셔도 무방합니다!
+단순히 props 값을 가져오기만 해서 받아오는 컴포넌트는 프리젠테이셔널 컴포넌트라고 부르고, 스토어에서 부터 값이나 액션 생성함수를 받아오는 컴포넌트를 컨테이너 컴포넌트라고 부른다고 했었죠.
+
+리덕스 진영에서는, 문서에서도 그렇고 생태계 쪽에서도 그렇고 프리젠테이셔널 / 컨테이너로 분리해서 작성하는게 일반적입니다. 
+
+반면, MobX 에서는, 딱히 그런걸 명시하지 않습니다. 그래서, 굳이 번거롭게 컨테이너를 강제적으로 만드실 필요는 없습니다. 
+
+하지만, 하셔도 무방합니다!
 
 <br/>
 
@@ -363,6 +373,8 @@ ReactDOM.render(
   </Provider>, document.getElementById('root'));
 ```
 
+<br/>
+
 # 기능 구현하기 - 아이템 추가
 
 아이템을 추가하는 기능부터 구현하겠습니다!
@@ -408,3 +420,254 @@ export default inject(({ market }) => ({
 ```
 
 함수형 컴포넌트에 inject 와 observer 를 적용할땐 이렇게 내보내주는 과정에서 사용하시면 조금 더 깔끔합니다.
+
+ShopItem 에서 클릭시 onPut 에 현재 자신의 name과 price 를 넣어서 호출하도록 설정을 해주겠습니다
+
+**src/components/ShopItem.js**
+
+```javascript
+import React from 'react';
+import './ShopItem.css';
+
+const ShopItem = ({ name, price, onPut }) => {
+  return (
+    <div className="ShopItem" onClick={() => onPut(name, price)}>
+      <h4>{name}</h4>
+      <div>{price}원</div>
+    </div>
+  );
+};
+
+export default ShopItem;
+```
+
+<br/>
+
+# 기능 구현하기 - 장바구니에 데이터 반영
+
+**src/components/BasketItemList.js**
+
+```javascript
+import React from 'react';
+import BasketItem from './BasketItem';
+import { inject, observer } from 'mobx-react';
+
+const BasketItemList = ({ items, total, onTake }) => {
+  const itemList = items.map(item => (
+    <BasketItem
+      name={item.name}
+      price={item.price}
+      count={item.count}
+      key={item.name}
+      onTake={onTake}
+    />
+  ));
+  return (
+    <div>
+      {itemList}
+      <hr />
+      <p>
+        <b>총합: </b> {total}원
+      </p>
+    </div>
+  );
+};
+
+export default inject(({ market }) => ({
+  items: market.selectedItems,
+  total: market.total,
+  onTake: market.take,
+}))(observer(BasketItemList));
+```
+그리고 그 내부의 BasketItem 를 구현해줄건데요,   
+여기서 주의하실 점은 리스트를 렌더링하시게 될 때에 내부에 있는 컴포넌트에도 observer 를 구현해주어야, 성능적으로 최적화가 일어난다는 점 입니다.
+
+**src/components/BasketItem.js**
+
+```javascript
+import React from 'react';
+import './BasketItem.css';
+import { observer } from 'mobx-react';
+
+const BasketItem = ({ name, price, count, onTake }) => {
+  return (
+    <div className="BasketItem">
+      <div className="name">{name}</div>
+      <div className="price">{price}원</div>
+      <div className="count">{count}</div>
+      <div className="return" onClick={() => onTake(name)}>갖다놓기</div>
+    </div>
+  );
+};
+
+export default observer(BasketItem);
+```
+다음과 같이 observer 를 하단이 아닌 위에서 설정해줘도 동일하게 작동합니다.
+
+```javascript
+import React from 'react';
+import './BasketItem.css';
+import { observer } from 'mobx-react';
+
+const BasketItem = observer(({ name, price, count, onTake }) => {
+  return (
+    <div className="BasketItem" onClick={() => onTake(name)}>
+      <div className="name">{name}</div>
+      <div className="price">{price}원</div>
+      <div className="count">{count}</div>
+      <div className="return">갖다놓기</div>
+    </div>
+  );
+});
+
+export default BasketItem;
+```
+
+<br/>
+
+# 스토어 끼리 관계형성
+지금은 counter 와 market 이 전혀 관계가 없기 때문에 서로간의 접근은 불필요 한 상황이지만, 만약에 해야한다면 어떻게 해야하는지 알아봅시다.
+
+스토어끼리 접근을 하려면, 우리는 RootStore 라는것을 만들어주어야 합니다.
+
+stores 에 index.js 라는 파일을 만들어보세요.
+
+**src/stores/index.js**
+```javascript
+import CounterStore from './counter';
+import MarketStore from './market';
+
+class RootStore {
+  constructor() {
+    this.counter = new CounterStore(this);
+    this.market = new MarketStore(this);
+  }
+}
+
+export default RootStore;
+```
+여기서, 다른 스토어들을 불러오고 constructor 에서 각 스토어를 만들어준 다음에,`this.스토어명 = new 새로운스토어(this)` 이런식으로 입력해줍니다.
+
+ 뒷부분에서 this 를 파라미터를 넣어주는게 중요합니다. 
+ 이렇게 함으로서 각 스토어들이, 현재 루트 스토어가 무엇인지 알 수 있게 됩니다.
+
+우리가 각 스토어를 만들 떄 루트 스토어를 파라미터로 넣어주었으니, 
+이를 따로 값으로 저장해두게끔 해주겠습니다.
+
+**src/stores/counter.js**
+
+```javascript
+import { observable, action } from 'mobx';
+
+export default class CounterStore {
+  @observable number = 0;
+
+  // **** 추가됨
+  constructor(root) {
+    this.root = root;
+  }
+
+  @action increase = () => {
+    this.number++;
+  }
+
+  @action decrease = () => {
+    this.number--;
+  }
+}
+```
+**src/stores/market.js**
+
+```javascript
+import { observable, action, computed } from 'mobx';
+
+export default class MarketStore {
+  @observable selectedItems = [];
+
+  // **** 추가됨
+  constructor(root) {
+    this.root = root;
+  }
+
+
+  // 이하 생략..
+}
+```
+이제, 프로젝트의 엔트리 index.js 에서 Provider 쪽에 스토어를 전달해줄 차례입니다. 
+
+다음과 같이 루트 스토어를 만들고 spread 문법으로 Provider 쪽에 props 를 풀어주시면 자동으로 counter 스토어와 market 스토어가 전달됩니다.
+
+**src/index.js**
+```javascript
+import React from 'react';
+import ReactDOM from 'react-dom';
+import { Provider } from 'mobx-react'; // MobX 에서 사용하는 Provider
+import App from './App';
+import RootStore from './stores';
+
+const root = new RootStore(); // *** 루트 스토어 생성
+
+ReactDOM.render(
+  <Provider {...root}> {/* *** ...root 으로 스토어 모두 자동으로 설정 */}
+    <App />
+  </Provider>,
+  document.getElementById('root')
+);
+```
+
+만약에, market 에서 counter 에 접근하고 싶다면, 
+this.root.counter.number 이런식으로 조회해서 사용해보면 됩니다.
+
+한번, 현재 스토어의 값에 따라 한번 상품을 클릭 할 시 몇개를 집어올 지 정해줘보도록 하겠습니다.
+
+우선 편의상 카운터의 기본 값을 1로 해주겠습니다.
+
+```javascript
+import { observable, action } from 'mobx';
+
+export default class CounterStore {
+  @observable number = 1; // ****  기본 값 1로 업데이트
+
+  // **** 추가됨
+  constructor(root) {
+    this.root = root;
+  }
+
+  @action
+  increase = () => {
+    this.number++;
+  };
+
+  @action
+  decrease = () => {
+    this.number--;
+  };
+}
+```
+
+다음에, market 에서 상품을 한번 집어 올 때 마다 카운터에 있는 상태의 갯수만큼 들고오게 구현을 해보겠습니다.
+
+**src/stores/market.js - put 액션**
+
+```javascript
+@action
+put = (name, price) => {
+  const { number } = this.root.counter;
+  // 존재하는지 찾고
+  const exists = this.selectedItems.find(item => item.name === name);
+  if (!exists) {
+    // 존재하지 않는다면 새로 집어넣습니다.
+    this.selectedItems.push({
+      name,
+      price,
+      count: number,
+    });
+    return;
+  }
+  exists.count += number;
+};
+```
+
+이렇게 하면, 예를들어 카운터의 값이 2면, 한번 상품이 클릭 될 때마다 두개씩 받아옵니다.
+
+<br/>
