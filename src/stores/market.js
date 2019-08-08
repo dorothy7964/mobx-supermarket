@@ -28,8 +28,9 @@ export default class MarketStore {
 
     @action
     take = name => {
+        const { number } = this.root.counter;
         const itemToTake = this.selectedItems.find(item => item.name === name);
-        itemToTake.count--;
+        itemToTake.count -= number;
         if (itemToTake.count === 0) {
             // 갯수가 0 이면
             this.selectedItems.remove(itemToTake); // 배열에서 제거처리합니다.
