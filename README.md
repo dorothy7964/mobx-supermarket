@@ -671,3 +671,306 @@ put = (name, price) => {
 이렇게 하면, 예를들어 카운터의 값이 2면, 한번 상품이 클릭 될 때마다 두개씩 받아옵니다.
 
 <br/>
+
+# MobX 의 리액트 컴포넌트 최적화
+
+## 1. 리스트를 렌더링 할 땐, 컴포넌트에 리스트 관련 데이터만 props 로 넣자
+
+리스트가 렌더링 될 때는 성능에 대해서 신경을 써주셔야 하는데요,   
+리스트 컴포넌트에 리스트 관련 props 만 넣는것을 권장합니다.   
+예를 들어서 다음과 같은 코드는 비효율 적입니다.  
+
+```javascript
+@observer class MyComponent extends Component {
+  render() {
+    const {todos, user} = this.props;
+    return (
+      <div>
+        {user.name}
+        <ul>
+            {todos.map(todo => <TodoView todo={todo} key={todo.id} />)}
+        </ul>
+      </div>
+    )
+  }
+}
+```
+
+이런 코드는 별로 좋지 않습니다.   
+왜냐하면 user.name 이 바뀔때도 컴포넌트가 리렌더링 되기 때문이죠.   
+이러한 구조 대신 아예 리스트를 잘 분리시켜서 다음과 같이 하는 것이 좋습니다.  
+
+```javascript
+observer class MyComponent extends Component {
+  render() {
+    const {todos, user} = this.props;
+    return (
+      <div>
+        {user.name}
+        <TodosView todos={todos} />
+      </div>
+    )
+  }
+}
+
+@observer class TodosView extends Component {
+  render() {
+    const {todos} = this.props;
+    return (
+      <ul>
+        {todos.map(todo => <TodoView todo={todo} key={todo.id} />)}
+      </ul>
+    )
+  }
+}
+```
+
+## 2. 세부참조 (dereference)는 최대한 늦게하자
+
+여기서 세부 참조 (혹은 역참조) 란, 우리가 특정 객체의 내부의 값을 조회하는것을 말합니다.   
+예를 들어서 우리가 장바구니의 정보들을 보여줄 때 다음과 같은 코드를 사용했었는데요,
+
+```javascript
+  const itemList = items.map(item => (
+    <BasketItem
+      name={item.name}
+      price={item.price}
+      count={item.count}
+      key={item.name}
+      onTake={onTake}
+    />
+  ));
+```
+
+여기서 item 에서 name, price, count 를 조회하는것이, 세부참조입니다.
+
+만약에, 코드를 이런식으로 하면 업데이트 성능 최적화를 이뤄낼 수 있습니다.
+
+```javascript
+const itemList = items.map(item => (
+  <BasketItem
+    item={item}
+    key={item.name}
+    onTake={onTake}
+  />
+));
+```
+
+변동이 일어날 수 있는 count 값의 세부참조를 우리는 BasketItem 컴포넌트 내부에서 하게 된다면,   
+더 높은 성능으로 컴포넌트를 업데이트 할 수 있습니다.   
+
+여기서 item.name 값은 바뀌지 않기 때문에 key 설정 부분에선 문제가 되지 않습니다.
+
+## 3. 함수는 미리 바인딩하고, 파라미터는 내부에서 넣어주기
+
+컴포넌트에 함수를 전달해 줄 때에는 미리 바인딩 하는것이 좋고,   
+파라미터가 유동적일땐 파라미터를 넣는 작업을 컴포넌트 밖이 아니라 안에서 하는것이 좋습니다.
+
+예를들어서 다음과 같은 코드는 썩 좋은 코드가 아닙니다.
+
+```javascript
+render() {
+  return <MyWidget onClick={() => { alert('hi') }} />
+}
+```
+
+그 대신에 이렇게 하는것이 좋습니다.
+
+```javascript
+render() {
+  return <MyWidget onClick={this.handleClick} />
+}
+
+handleClick = () => {
+    alert('hi')
+}
+```
+
+그리고 다음과 같은 코드 또한 별로 좋지 않습니다.
+
+```javascript
+const ShopItemList = ({ onPut }) => {
+  const itemList = items.map(item => (
+    <ShopItem {...item} key={item.name} onPut={() => onPut(item.name, item.price)} />
+  ));
+  return <div>{itemList}</div>;
+};
+```
+
+그 대신에 우리가 이전에 작성했던 코드처럼 onPut={onPut} 이렇게 전달하고 파라미터는 컴포넌트 내부에서 넣어주는것이 좋죠.
+
+```javascript
+const ShopItemList = ({ onPut }) => {
+  const itemList = items.map(item => (
+    <ShopItem {...item} key={item.name} onPut={onPut} />
+  ));
+  return <div>{itemList}</div>;
+};
+
+const ShopItem = ({ name, price, onPut }) => {
+  return (
+    <div className="ShopItem" onClick={() => onPut(name, price)}>
+      <h4>{name}</h4>
+      <div>{price}원</div>
+    </div>
+  );
+};
+```
+
+<br/>
+
+# 만든 프로젝트를 개선시키기
+
+우리는 프로젝트를 만들 때 3번 규칙은 잘 따라줬지만,   
+1번과 2번은 조금은 부족하게 따라줬습니다.   
+
+예를들어서, BasketItemList 에서 세부 참조를 바로 해줬었고,   
+total 값을 리스트에서 props 로 받아오게 했습니다.  
+
+때문에, 만약에 상품의 갯수가 달라지게 될 때,   
+BasketItemList 에서도 리렌더링이 일어났고,     
+BasketItem 에서도 리렌더링이 일어났습니다.  
+
+신라면을 추가했을 때 리스트 전체적인 렌더링을 했고,   
+나머지 생수/새우깡/포카칩은 리렌더링은 이미 최적화가 이뤄져서   
+(observer 가 자동으로 해줬습니다) 리렌더링이 되지 않았고,   
+신라면만 리렌더링이 됐죠.  
+
+사실 지금의 성능도 충분하긴 하지만. 여기서 조금만 고쳐주면 BasketItemList 의 렌더링을 방지해서 배열 map 하는 작업 자체를 생략할 수도 있습니다.
+
+첫번째로, 총합이 나타나는 부분을 컴포넌트화 해주겠습니다.
+
+**src/components/TotalPrice.js**
+
+```javascript
+import React, { Component } from 'react';
+import { observer, inject } from 'mobx-react';
+
+@inject(({ market }) => ({ total: market.total }))
+@observer
+class TotalPrice extends Component {
+  render() {
+    const { total } = this.props;
+    return (
+      <div>
+        <hr />
+        <p>
+          <b>총합: </b> {total}원
+        </p>
+      </div>
+    );
+  }
+}
+
+export default TotalPrice;
+```
+
+편의상 클래스형태로 작성해주었는데요,   
+함수형으로 작성하던, 클래스형으로 작성하던 큰 상관은 없습니다.   
+클래스형태로 작성하면 decorator 를 편하게 쓸 수 있다는 장점이 존재합니다.  
+
+그리고 이 컴포넌트를 SuperMarketTemplate 의 total 이라는 값으로   
+JSX 형태로 전달해주겠습니다.
+
+**src/components/SuperMarket.js**
+
+```javascript
+import React from 'react';
+import SuperMarketTemplate from './SuperMarketTemplate';
+import ShopItemList from './ShopItemList';
+import BasketItemList from './BasketItemList';
+import TotalPrice from './TotalPrice';
+
+const SuperMarket = () => {
+  return (
+    <SuperMarketTemplate
+      items={<ShopItemList />}
+      basket={<BasketItemList />}
+      total={<TotalPrice />}
+    />
+  );
+};
+
+export default SuperMarket;
+```
+
+**src/components/SuperMarketTemplate.js**
+
+```javascript
+import React from 'react';
+import './SuperMarketTemplate.css';
+
+const SuperMarketTemplate = ({ items, basket, total }) => {
+  return (
+    <div className="SuperMarketTemplate">
+      <div className="items-wrapper">
+        <h2>상품</h2>
+        {items}
+      </div>
+      <div className="basket-wrapper">
+        <h2>장바구니</h2>
+        {basket}
+        {total}
+      </div>
+    </div>
+  );
+};
+export default SuperMarketTemplate;
+```
+
+그 다음, BracketItemList 에서 props 로 받아오던 total 은 없애고,   
+세부 참조를 BracketItem 내부에서 하도록 수정해주겠습니다.
+
+**src/components/BracketItemList.js**
+
+```javascript
+import React from 'react';
+import BasketItem from './BasketItem';
+import { inject, observer } from 'mobx-react';
+
+const BasketItemList = ({ items, total, onTake }) => {
+  const itemList = items.map(item => (
+    <BasketItem item={item} key={item.name} onTake={onTake} />
+  ));
+  return <div>{itemList}</div>;
+};
+
+export default inject(({ market }) => ({
+  items: market.selectedItems,
+  onTake: market.take,
+}))(observer(BasketItemList));
+```
+
+**src/components/BracketItem.js**
+
+```javascript
+import React from 'react';
+import './BasketItem.css';
+import { observer } from 'mobx-react';
+
+const BasketItem = observer(({ item, onTake }) => {
+  return (
+    <div className="BasketItem">
+      <div className="name">{item.name}</div>
+      <div className="price">{item.price}원</div>
+      <div className="count">{item.count}</div>
+      <div className="return" onClick={() => onTake(item.name)}>
+        갖다놓기
+      </div>
+    </div>
+  );
+});
+
+export default BasketItem;
+```
+
+이렇게 하면 최적화가 끝납니다!
+
+
+BracketItemList 컴포넌트 전체가 리렌더링된것이 아니라,   
+그 내부의 TotalPrice 와 필요한 아이템만 업데이트가 되고있습니다.   
+물론, 지금은 체감되는 차이가 없겠지만 앱의 규모가 커진다면,   
+이렇게 최적화를 해주면 확실히 체감 될 것입니다.  
+
+
+

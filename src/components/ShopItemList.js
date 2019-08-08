@@ -21,9 +21,9 @@ const items = [
 const ShopItemList = ({ onPut  }) => {
     const itemList = items.map(item => 
         <ShopItem {...item} key={item.name} onPut={onPut} />
-    );
-    
-    return <div>{itemList}</div>;
+        );
+        
+        return <div>{itemList}</div>;
 };
 
 // **** inject, observer 적용
